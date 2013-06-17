@@ -158,7 +158,7 @@ function sanitize_sed_replace($str) {
     return $str;
 }
 
-// If option "preview" is not set to "false".
+// If option "preview" is set to "false".
 if ($options['preview']['value'] === false) {
     // Database
     shell_exec("sed -i '".$options['backup-ext']['value']."' 's/".sanitize_sed_rx($search)."/".sanitize_sed_replace($replace)."/g' ".$file);
