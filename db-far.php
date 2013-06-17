@@ -4,7 +4,11 @@
  * PHP script that perform a find and replace in a database dump (tested with
  * MySQL) with adjustments of the PHP serialize founded.
  *
- * Don't forget to escape your "special characters": http://www.robvanderwoude.com/escapechars.php
+ * Don't forget to escape your "special characters":
+ *   "a$b" -> "a\$b"
+ *   "a"b" -> "a\"b"
+ *   "a`b" -> "a\`b"
+ *   "a!b" -> "a"'!'"b" or 'a!b'
  *
  * Usage:
  *   $ db-far [options] [search] [replace] [file]
@@ -13,7 +17,11 @@
  *   The UNIX CLI command "sed" (http://www.gnu.org/software/sed/).
  *
  * Example:
+ *   Domain replacement with a backup file "dump.sql.old".
  *   $ db-far --backup-ext=".old" "http://old.domain.ext" "http://new.domain.ext" backup-dumps/dump.sql
+ *
+ *   String replacement with quotes and exclamation mark.
+ *   $ db-far "My \"special\" string" "My awesome string"'!' backup-dumps/dump.sql
  */
 
 // Options.
@@ -139,14 +147,10 @@ function sanitize_sed_rx($str) {
     $str = sanitize_sed_replace($str);
     $str = str_replace('[', '\[', $str);
     $str = str_replace(']', '\]', $str);
-    $str = str_replace('(', '\(', $str);
-    $str = str_replace(')', '\)', $str);
-    $str = str_replace('{', '\{', $str);
-    $str = str_replace('}', '\}', $str);
-    $str = str_replace('+', '\+', $str);
-    $str = str_replace('?', '\?', $str);
     $str = str_replace('$', '\$', $str);
     $str = str_replace('^', '\^', $str);
+    $str = str_replace('+', '\+', $str);
+    $str = str_replace('?', '\?', $str);
     $str = str_replace('*', '\*', $str);
     $str = str_replace('.', '\.', $str);
     return $str;
@@ -163,7 +167,7 @@ function sanitize_sed_replace($str) {
 // If option "preview" is set to "false".
 if ($options['preview']['value'] === false) {
     // Database
-    shell_exec("sed -i '".$options['backup-ext']['value']."' 's/".sanitize_sed_rx($search)."/".sanitize_sed_replace($replace)."/g' ".$file);
+    shell_exec("LANG=C sed -i '".$options['backup-ext']['value']."' 's/".sanitize_sed_rx($search)."/".sanitize_sed_replace($replace)."/g' ".$file);
     // Correcting of lenght of string in PHP serialized
     $new_dump_sql = preg_replace_callback('/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/', function ($m){
         global $options;
