@@ -4,6 +4,8 @@
  * PHP script that perform a find and replace in a database dump (tested with
  * MySQL) with adjustments of the PHP serialize founded.
  *
+ * Don't forget to escape your "special characters": http://www.robvanderwoude.com/escapechars.php
+ *
  * Usage:
  *   $ db-far [options] [search] [replace] [file]
  *
