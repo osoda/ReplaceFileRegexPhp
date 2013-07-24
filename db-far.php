@@ -13,9 +13,6 @@
  * Usage:
  *   $ db-far [options] [search] [replace] [file]
  *
- * Dependancy:
- *   The UNIX CLI command "sed" (http://www.gnu.org/software/sed/).
- *
  * Example:
  *   Domain replacement with a backup file "dump.sql.old".
  *   $ db-far --backup-ext=".old" "http://old.domain.ext" "http://new.domain.ext" backup-dumps/dump.sql
@@ -143,37 +140,25 @@ $search     = $arguments[0];
 $replace    = $arguments[1];
 $file       = $arguments[2];
 
-function sanitize_sed_rx($str) {
-    $str = sanitize_sed_replace($str);
-    $str = str_replace('[', '\[', $str);
-    $str = str_replace(']', '\]', $str);
-    $str = str_replace('$', '\$', $str);
-    $str = str_replace('^', '\^', $str);
-    $str = str_replace('+', '\+', $str);
-    $str = str_replace('?', '\?', $str);
-    $str = str_replace('*', '\*', $str);
-    $str = str_replace('.', '\.', $str);
-    return $str;
+// If a "backup-ext" option is provided, do a backup.
+if (
+    empty($options['backup-ext']['value'])
+    || (!empty($options['backup-ext']['value']) && copy($file, $file.$options['backup-ext']['value']))
+) {
+    // If option "preview" is set to "false".
+    if ($options['preview']['value'] === false) {
+        // Database
+        $new_dump_sql = str_replace($search, $replace, file_get_contents($file));
+        // Correcting of lenght of string in PHP serialized
+        $new_dump_sql = preg_replace_callback('/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/', function ($m){
+            global $options;
+            return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[5]);
+        }, $new_dump_sql);
+        file_put_contents($file, $new_dump_sql);
+    }
 }
-function sanitize_sed_replace($str) {
-    $str = str_replace('\\', '\\\\', $str);
-    $str = str_replace('&', '\&', $str);
-    $str = str_replace('/', '\/', $str);
-    $str = str_replace('"', '\\\"', $str);
-    $str = str_replace("'", "\\\'\''", $str);
-    return $str;
-}
-
-// If option "preview" is set to "false".
-if ($options['preview']['value'] === false) {
-    // Database
-    shell_exec("LANG=C sed -i '".$options['backup-ext']['value']."' 's/".sanitize_sed_rx($search)."/".sanitize_sed_replace($replace)."/g' ".$file);
-    // Correcting of lenght of string in PHP serialized
-    $new_dump_sql = preg_replace_callback('/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/', function ($m){
-        global $options;
-        return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[5]);
-    }, file_get_contents($file));
-    file_put_contents($file, $new_dump_sql);
+else {
+    die('The backup file could not be created. Replacement aborted.');
 }
 
 // If we have to show verbose.
