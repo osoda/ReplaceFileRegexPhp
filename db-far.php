@@ -33,6 +33,11 @@ $options = array(
         'type'  => 'string',
         'value' => 'UTF-8',
     ),
+    'source-type' => array(
+        'help'  => '(backslashed | raw) Use "backslashed" for replacements of PHP serialized that contain backslashed double quotes to delimit strings, ex: s:5:\\"hello\\"; Commonly founded in MySQL dump. Use "raw" for replacements in raw PHP serialized, ex: s:5:"hello";',
+        'type'  => 'string',
+        'value' => 'backslashed',
+    ),
     'preview' => array(
         'help'  => 'Like "verbose" but without executing the replacement.',
         'type'  => 'boolean',
@@ -150,9 +155,19 @@ if (
         // Database
         $new_dump_sql = str_replace($search, $replace, file_get_contents($file));
         // Correcting of lenght of string in PHP serialized
-        $new_dump_sql = preg_replace_callback('/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/', function ($m){
+        if ($options['source-type']['value'] == 'raw') {
+            $pattern = '/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/';
+        } else {
+            $pattern = '/(s:)([0-9]*)(:\\\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'((?!\\\\\\").)*)(\\\\")/';
+        }
+
+        $new_dump_sql = preg_replace_callback($pattern, function ($m){
             global $options;
-            return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[5]);
+            if ($options['source-type']['value'] == 'raw') {
+                return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[5]);
+            } else {
+                return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[6]);
+            }
         }, $new_dump_sql);
         file_put_contents($file, $new_dump_sql);
     }
