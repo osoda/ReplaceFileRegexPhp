@@ -1,5 +1,5 @@
-#!/usr/bin/php
 <?php
+
 /**
  * PHP script that perform a find and replace in a database dump (tested with
  * MySQL) with adjustments of the PHP serialize founded.
@@ -34,7 +34,7 @@ $options = array(
         'value' => 'UTF-8',
     ),
     'source-type' => array(
-        'help'  => '(backslashed | raw) Use "backslashed" for replacements of PHP serialized that contain backslashed double quotes to delimit strings, ex: s:5:\\"hello\\"; Commonly founded in MySQL dump. Use "raw" for replacements in raw PHP serialized, ex: s:5:"hello";',
+        'help'  => '(backslashed | raw ) Use "backslashed" for replacements of PHP serialized that contain backslashed double quotes to delimit strings, ex: s:5:\\"hello\\"; Commonly founded in MySQL dump. Use "raw" for replacements in raw PHP serialized, ex: s:5:"hello";',
         'type'  => 'string',
         'value' => 'backslashed',
     ),
@@ -48,51 +48,58 @@ $options = array(
         'type'  => 'boolean',
         'value' => false,
     ),
+    'regex' => array(
+        'help'  => 'Evaluate regex.',
+        'type'  => 'boolean',
+        'value' => false,
+    ),
 );
 
 // Return the value of an option formatted to be print.
-function format_option_value($option) {
+function format_option_value($option)
+{
     switch ($option['type']) {
         case 'boolean':
-            return ($option['value']?'true':'false');
+            return ($option['value'] ? 'true' : 'false');
             break;
         default:
             if (strstr($option['value'], ' ') === false) {
                 return $option['value'];
-            }
-            else{
-                return '"'.$option['value'].'"';
+            } else {
+                return '"' . $option['value'] . '"';
             }
             break;
     }
 }
 
 // "echo" in Terminal and add "new line" when 80 caracters is reach.
-function e($txt = '', $indentation = 0) {
+function e($txt = '', $indentation = 0)
+{
     $max_length = 80;
-    $indentation = $indentation*4;
-    while ((mb_strlen($txt, 'UTF-8')+$indentation) > $max_length) {
+    $indentation = $indentation * 4;
+    while ((mb_strlen($txt, 'UTF-8') + $indentation) > $max_length) {
         $line = substr($txt, 0, $max_length);
         $pos_space = strrpos($line, ' ');
         if ($pos_space === false) {
             $pos_space = $max_length;
         }
-        echo str_repeat(' ', $indentation).trim(substr($line, 0, $pos_space)).PHP_EOL;
-        $txt = substr($txt, $pos_space+1);
+        echo str_repeat(' ', $indentation) . trim(substr($line, 0, $pos_space)) . PHP_EOL;
+        $txt = substr($txt, $pos_space + 1);
     }
     if (mb_strlen(trim($txt), 'UTF-8') > 0) {
-        echo str_repeat(' ', $indentation).trim($txt).PHP_EOL;
+        echo str_repeat(' ', $indentation) . trim($txt) . PHP_EOL;
     }
 }
 
-function show_help() {
+function show_help()
+{
     global $options;
     e('Usage');
     e('db-far [options] [search] [replace] [file]', 1);
     e();
     e("Options");
     foreach ($options as $key => $option) {
-        e("--".$key." (".$option['type']."), default: --".$key."=".format_option_value($option), 1);
+        e("--" . $key . " (" . $option['type'] . "), default: --" . $key . "=" . format_option_value($option), 1);
         e($option['help'], 2);
     }
 }
@@ -102,14 +109,13 @@ array_shift($argv);
 // Arguments (contain raw options + arguments at this time).
 $arguments = $argv;
 // For each argument found in the command.
-for ($k=0;$k<count($argv);$k++) {
+for ($k = 0; $k < count($argv); $k++) {
     // If the command arg is an option.
     if (preg_match('/^--([^=]+)=(.*)$/', $argv[$k], $matches)) {
         // If the option is not valid.
         if (!array_key_exists($matches[1], $options)) {
-            die('Invalid option: "'.$matches[1].'".');
-        }
-        else{
+            die('Invalid option: "' . $matches[1] . '".');
+        } else {
             // Override the option.
             switch ($options[$matches[1]]['type']) {
                 case 'boolean':
@@ -124,7 +130,7 @@ for ($k=0;$k<count($argv);$k++) {
         }
     }
     // No more options, the rest are arguments.
-    else{
+    else {
         break;
     }
 }
@@ -137,7 +143,8 @@ if (!in_array($options['encoding']['value'], $supported_encodings)) {
 
 // If the count of arguments is incorrect.
 if (count($arguments) != 3) {
-    show_help();exit;
+    show_help();
+    exit;
 }
 
 // Arguments.
@@ -145,46 +152,70 @@ $search     = $arguments[0];
 $replace    = $arguments[1];
 $file       = $arguments[2];
 
-// If a "backup-ext" option is provided, do a backup.
-if (
-    empty($options['backup-ext']['value'])
-    || (!empty($options['backup-ext']['value']) && copy($file, $file.$options['backup-ext']['value']))
-) {
-    // If option "preview" is set to "false".
-    if ($options['preview']['value'] === false) {
-        // Database
-        $new_dump_sql = str_replace($search, $replace, file_get_contents($file));
-        // Correcting of lenght of string in PHP serialized
-        if ($options['source-type']['value'] == 'raw') {
-            $pattern = '/(s:)([0-9]*)(:\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'[^"]*)(\\")/';
-        } else {
-            $pattern = '/(s:)([0-9]*)(:\\\\")([^"]*'.str_replace('/', '\/', preg_quote($replace)).'((?!\\\\\\").)*)(\\\\")/';
-        }
+function replace($search, $replace, $file, $options)
+{
+    // If a "backup-ext" option is provided, do a backup.
+    if (
+        empty($options['backup-ext']['value'])
+        || (!empty($options['backup-ext']['value']) && copy($file, $file . $options['backup-ext']['value']))
+    ) {
+        // If option "preview" is set to "false".
+        if ($options['preview']['value'] === true)
+            return;
 
-        $new_dump_sql = preg_replace_callback($pattern, function ($m){
-            global $options;
-            if ($options['source-type']['value'] == 'raw') {
-                return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[5]);
-            } else {
-                return($m[1].mb_strlen($m[4], $options['encoding']['value']).$m[3].$m[4].$m[6]);
-            }
-        }, $new_dump_sql);
+        if ($options['regex']['value'] === true) {
+            $new_dump_sql = regex($file, $search, $replace);
+        } else
+            $new_dump_sql = replaceText($search, $replace, $file, $options);
+
         file_put_contents($file, $new_dump_sql);
+    } else {
+        die('The backup file could not be created. Replacement aborted.');
     }
 }
-else {
-    die('The backup file could not be created. Replacement aborted.');
+
+
+function replaceText($search, $replace, $file, $options)
+{
+    // Database
+    $new_dump_sql = str_replace($search, $replace, file_get_contents($file));
+    // Correcting of lenght of string in PHP serialized
+    if ($options['source-type']['value'] == 'raw') {
+        $pattern = '/(s:)([0-9]*)(:\\")([^"]*' . str_replace('/', '\/', preg_quote($replace)) . '[^"]*)(\\")/';
+    } else if ($options['source-type']['value'] == 'regex') {
+        $pattern = '/' . $replace . '/';
+    } else {
+        $pattern = '/(s:)([0-9]*)(:\\\\")([^"]*' . str_replace('/', '\/', preg_quote($replace)) . '((?!\\\\\\").)*)(\\\\")/';
+    }
+
+    $new_dump_sql = preg_replace_callback($pattern, function ($m) {
+        global $options;
+        if ($options['source-type']['value'] == 'raw') {
+            return ($m[1] . mb_strlen($m[4], $options['encoding']['value']) . $m[3] . $m[4] . $m[5]);
+        } else {
+            return ($m[1] . mb_strlen($m[4], $options['encoding']['value']) . $m[3] . $m[4] . $m[6]);
+        }
+    }, $new_dump_sql);
+    return $new_dump_sql;
 }
+
+function regex($file, $pattern, $replace)
+{
+    $pattern = "/$pattern/";
+    return $new_dump_sql = preg_replace($pattern, $replace, file_get_contents($file));
+}
+
+
+replace($search, $replace, $file, $options);
 
 // If we have to show verbose.
 if ($options['preview']['value'] || $options['verbose']['value']) {
     e("Options");
     foreach ($options as $key => $option) {
-        e(str_pad($key, 12, ' ')."= ".format_option_value($option), 1);
+        e(str_pad($key, 12, ' ') . "= " . format_option_value($option), 1);
     }
     e("Arguments");
-    e(str_pad("search", 12, ' ')."= ".$search, 1);
-    e(str_pad("replace", 12, ' ')."= ".$replace, 1);
-    e(str_pad("file", 12, ' ')."= ".$file, 1);
+    e(str_pad("search", 12, ' ') . "= " . $search, 1);
+    e(str_pad("replace", 12, ' ') . "= " . $replace, 1);
+    e(str_pad("file", 12, ' ') . "= " . $file, 1);
 }
-?>
