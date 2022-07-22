@@ -21,6 +21,10 @@
  *   $ db-far "My \"special\" string" "My awesome string"'!' backup-dumps/dump.sql
  */
 
+$config = [
+    'multiple_replace' => false,
+];
+
 // Options.
 $options = array(
     'backup-ext' => array(
@@ -104,56 +108,67 @@ function show_help()
     }
 }
 
-// Delete the first argument (the command).
-array_shift($argv);
-// Arguments (contain raw options + arguments at this time).
-$arguments = $argv;
-// For each argument found in the command.
-for ($k = 0; $k < count($argv); $k++) {
-    // If the command arg is an option.
-    if (preg_match('/^--([^=]+)=(.*)$/', $argv[$k], $matches)) {
-        // If the option is not valid.
-        if (!array_key_exists($matches[1], $options)) {
-            die('Invalid option: "' . $matches[1] . '".');
-        } else {
-            // Override the option.
-            switch ($options[$matches[1]]['type']) {
-                case 'boolean':
-                    $options[$matches[1]]['value'] = (strtolower($matches[2]) == 'true');
-                    break;
-                default:
-                    $options[$matches[1]]['value'] = $matches[2];
-                    break;
+
+function getArgs($argv)
+{
+    global $options;
+
+    // Delete the first argument (the command).
+    array_shift($argv);
+    // Arguments (contain raw options + arguments at this time).
+    $arguments = $argv;
+    // For each argument found in the command.
+    for ($k = 0; $k < count($argv); $k++) {
+        // If the command arg is an option.
+        if (preg_match('/^--([^=]+)=(.*)$/', $argv[$k], $matches)) {
+            // If the option is not valid.
+            if (!array_key_exists($matches[1], $options)) {
+                die('Invalid option: "' . $matches[1] . '".');
+            } else {
+                // Override the option.
+                switch ($options[$matches[1]]['type']) {
+                    case 'boolean':
+                        $options[$matches[1]]['value'] = (strtolower($matches[2]) == 'true');
+                        break;
+                    default:
+                        $options[$matches[1]]['value'] = $matches[2];
+                        break;
+                }
+                // Delete this "option" entry from the "arguments" array.
+                array_shift($arguments);
             }
-            // Delete this "option" entry from the "arguments" array.
-            array_shift($arguments);
+        }
+        // No more options, the rest are arguments.
+        else {
+            break;
         }
     }
-    // No more options, the rest are arguments.
-    else {
-        break;
+
+    // Check if encoding is supported.
+    $supported_encodings = mb_list_encodings();
+    if (!in_array($options['encoding']['value'], $supported_encodings)) {
+        die('The encoding is not supported. See this page: http://www.php.net/manual/en/mbstring.supported-encodings.php');
     }
+
+    // If the count of arguments is incorrect.
+    if (count($arguments) != 3) {
+        show_help();
+        exit;
+    }
+
+    // Arguments.
+    $search     = $arguments[0];
+    $replace    = $arguments[1];
+    $file       = $arguments[2];
+
+    return [$search, $replace, $file];
 }
 
-// Check if encoding is supported.
-$supported_encodings = mb_list_encodings();
-if (!in_array($options['encoding']['value'], $supported_encodings)) {
-    die('The encoding is not supported. See this page: http://www.php.net/manual/en/mbstring.supported-encodings.php');
-}
 
-// If the count of arguments is incorrect.
-if (count($arguments) != 3) {
-    show_help();
-    exit;
-}
 
-// Arguments.
-$search     = $arguments[0];
-$replace    = $arguments[1];
-$file       = $arguments[2];
-
-function replace($search, $replace, $file, $options)
+function replace($search, $replace, $file, $options, $textToReplace = null)
 {
+    global $config;
     // If a "backup-ext" option is provided, do a backup.
     if (
         empty($options['backup-ext']['value'])
@@ -163,22 +178,27 @@ function replace($search, $replace, $file, $options)
         if ($options['preview']['value'] === true)
             return;
 
-        if ($options['regex']['value'] === true) {
-            $new_dump_sql = regex($file, $search, $replace);
-        } else
-            $new_dump_sql = replaceText($search, $replace, $file, $options);
+        $textToReplace = is_null($textToReplace) ? file_get_contents($file) : $textToReplace;
 
-        file_put_contents($file, $new_dump_sql);
+        if ($options['regex']['value'] === true) {
+            $new_dump_sql = regex($textToReplace, $search, $replace);
+        } else
+            $new_dump_sql = replaceText($search, $replace, $textToReplace, $options);
+
+        if ($config['multiple_replace'])
+            return $new_dump_sql;
+        else
+            file_put_contents($file, $new_dump_sql);
     } else {
         die('The backup file could not be created. Replacement aborted.');
     }
 }
 
 
-function replaceText($search, $replace, $file, $options)
+function replaceText($search, $replace, $textToReplace, $options)
 {
     // Database
-    $new_dump_sql = str_replace($search, $replace, file_get_contents($file));
+    $new_dump_sql = str_replace($search, $replace, $textToReplace);
     // Correcting of lenght of string in PHP serialized
     if ($options['source-type']['value'] == 'raw') {
         $pattern = '/(s:)([0-9]*)(:\\")([^"]*' . str_replace('/', '\/', preg_quote($replace)) . '[^"]*)(\\")/';
@@ -199,14 +219,15 @@ function replaceText($search, $replace, $file, $options)
     return $new_dump_sql;
 }
 
-function regex($file, $pattern, $replace)
+function regex($textToReplace, $pattern, $replace)
 {
     $pattern = "/$pattern/";
-    return $new_dump_sql = preg_replace($pattern, $replace, file_get_contents($file));
+    $new_dump_sql = preg_replace($pattern, $replace, $textToReplace);
+    return $new_dump_sql;
 }
 
 
-replace($search, $replace, $file, $options);
+// replace($search, $replace, $file, $options);
 
 // If we have to show verbose.
 if ($options['preview']['value'] || $options['verbose']['value']) {
@@ -219,3 +240,8 @@ if ($options['preview']['value'] || $options['verbose']['value']) {
     e(str_pad("replace", 12, ' ') . "= " . $replace, 1);
     e(str_pad("file", 12, ' ') . "= " . $file, 1);
 }
+
+
+// To execute: 
+// list($search, $replace, $file) = getArgs($argv):
+// replace($search, $replace, $file, $options);
