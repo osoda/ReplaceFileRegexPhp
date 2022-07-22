@@ -1,7 +1,7 @@
 <?php
 
 $ds = DIRECTORY_SEPARATOR;
-$libreria = dirname(__FILE__) . "{$ds}..{$ds}class{$ds}db-far.php";
+$libreria = dirname(__FILE__) . "{$ds}class{$ds}db-far.php";
 
 $dirExecution = getcwd();
 // $document_root = str_replace(getcwd() . DIRECTORY_SEPARATOR, '', $document_root);
@@ -58,7 +58,7 @@ file_put_contents($file, $textToReplace);
 echo "Archivo modificado exitosamente;" . PHP_EOL;
 
 /* Executar:
-php /d/xampp7/htdocs/utils/ReplaceFileRegex/ReplaceFileRegex.php dbc_db.sql
+php /d/xampp7/htdocs/utils/ReplaceFileRegexPhp/ReplaceFileRegex.php dbc_db.sql
 
 */
 
